@@ -29,55 +29,64 @@ This project demonstrates deep proficiency in **Distributed Systems design, Clou
 The ecosystem relies on an asynchronous, message-driven orchestration model designed to prevent cascading failures.
 
 ```mermaid
-graph TD
-    Client(["🌐 Client Application"])
-    
+graph LR
+    %% External
+    User(["🌐 Client"])
+    Notification(["📧 SMTP Email Server"])
+
+    %% Services
     subgraph K8s["☸️ Kubernetes Cluster"]
-        direction TB
+        Gateway["<img src='https://cdn.iconscout.com/icon/free/png-256/flask-18-1175126.png' width='20' height='20' /> API Gateway"]
+        Auth["<img src='https://cdn.iconscout.com/icon/free/png-256/auth0-3628628-3030383.png' width='20' height='20' /> Auth Service"]
+        Converter["<img src='https://cdn.iconscout.com/icon/free/png-256/python-2-226051.png' width='20' height='20' /> Converter Engine"]
+        Notifier["🔔 Notification Service"]
         
-        subgraph Compute["⚡ Compute & Orchestration"]
-            Gateway["API Gateway<br/>(Flask)"]
-            Auth["Auth Service<br/>(Flask / JWT)"]
-        end
-        
-        subgraph Workers["⚙️ Asynchronous Workers"]
-            Converter["Converter Engine<br/>(Compute-Bound Worker)"]
-            Notifier["Notification Service<br/>(I/O-Bound Worker)"]
-        end
-        
-        subgraph Broker["📨 Message Broker"]
-            RabbitMQ{{"RabbitMQ<br/>(Persistent Queues)"}}
-        end
+        %% Broker
+        RabbitMQ{{"<img src='https://cdn.iconscout.com/icon/free/png-256/rabbitmq-282296.png' width='20' height='20' /> RabbitMQ<br>Event Bus"}}
     end
 
-    subgraph Data["💾 Persistence Layer"]
-        MySQL[("MySQL<br/>(Relational Identity)")]
-        GridFS[("MongoDB GridFS<br/>(Segmented Blob Storage)")]
+    %% Storage
+    subgraph Data["💾 Persistent Storage"]
+        MySQL[("<img src='https://cdn.iconscout.com/icon/free/png-256/mysql-19-1174939.png' width='20' height='20' /> MySQL<br>Users DB")]
+        GridFS[("<img src='https://cdn.iconscout.com/icon/free/png-256/mongodb-5-1175140.png' width='20' height='20' /> MongoDB<br>GridFS")]
     end
 
-    %% Interactions
-    Client -->|1. Auth & Token| Gateway
-    Gateway <-->|2. Stateless Auth validation| Auth
-    Auth <-->|3. User Identity Check| MySQL
+    %% Connections
+    User -->|1. Login| Gateway
+    Gateway <-->|2. Validates JWT| Auth
+    Auth <-->|3. User Lookup| MySQL
     
-    Client -->|4. Upload MP4 (Chunked)| Gateway
-    Gateway -->|5. Stream to distributed storage| GridFS
-    Gateway -->|6. Publish 'Video Ready' Event| RabbitMQ
+    User -->|4. Upload MP4| Gateway
+    Gateway -->|5. Store File| GridFS
+    Gateway -->|6. Publish Event| RabbitMQ
     
-    RabbitMQ -->|7. Consume (Ack/Nack)| Converter
-    Converter <-->|8. Read MP4 / Write MP3| GridFS
-    Converter -->|9. Publish 'Audio Ready' Event| RabbitMQ
+    RabbitMQ -->|7. Consume Task| Converter
+    Converter <-->|8. Process Data| GridFS
+    Converter -->|9. Publish Success| RabbitMQ
     
-    RabbitMQ -->|10. Consume| Notifier
-    Notifier -->|11. Dispatch Email (SMTP)| Client
+    RabbitMQ -->|10. Trigger Notify| Notifier
+    Notifier -->|11. Send ID| Notification
+    Notification -->|12. Email| User
     
-    Client -->|12. Request MP3 (JWT + FID)| Gateway
-    Gateway <-->|13. Stream File via Identity| GridFS
-    
-    classDef cluster fill:#f8fafc,stroke:#e2e8f0,stroke-width:2px;
-    classDef node fill:#ffffff,stroke:#cbd5e1,stroke-width:1px,color:#1e293b;
-    class K8s,Compute,Workers,Broker,Data cluster;
-    class Client,Gateway,Auth,Converter,Notifier,RabbitMQ,MySQL,GridFS node;
+    User -->|13. Download MP3| Gateway
+    Gateway <-->|14. Fetch File| GridFS
+
+    %% Theme-Safe Colors
+    classDef gateway fill:#3b82f6,color:#ffffff,stroke:#2563eb,stroke-width:2px;
+    classDef auth fill:#06b6d4,color:#ffffff,stroke:#0891b2,stroke-width:2px;
+    classDef converter fill:#10b981,color:#ffffff,stroke:#059669,stroke-width:2px;
+    classDef notifier fill:#8b5cf6,color:#ffffff,stroke:#7c3aed,stroke-width:2px;
+    classDef broker fill:#f97316,color:#ffffff,stroke:#ea580c,stroke-width:2px;
+    classDef storage fill:#6366f1,color:#ffffff,stroke:#4f46e5,stroke-width:2px;
+    classDef external fill:#6b7280,color:#ffffff,stroke:#4b5563,stroke-width:2px;
+
+    class Gateway gateway;
+    class Auth auth;
+    class Converter converter;
+    class Notifier notifier;
+    class RabbitMQ broker;
+    class MySQL,GridFS storage;
+    class User,Notification external;
 ```
 
 ---
