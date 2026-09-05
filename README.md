@@ -68,7 +68,7 @@ graph TD
 
 ### 2. Distributed Large Object Management (GridFS)
 - **Problem**: Storing large `.mp4` payloads in local Kubernetes ephemeral storage risks Pod evictions due to disk pressure. Relational databases are not optimized for multi-gigabyte BLOBs.
-- **Solution**: Leveraged **MongoDB GridFS** to shard large media files into manageable **255KB chunks**. 
+- **Solution**: Leveraged **MongoDB GridFS** to shard large media files into manageable **chunks**. 
 - **Result**: Enabled **O(1) memory usage** during processing; the system streams chunks from the database rather than loading entire files into RAM.
 
 ### 3. Stateless Identity Management
@@ -96,7 +96,7 @@ graph TD
 ## 📈 Performance Benchmarks
 *Tested locally using Docker Compose, circumventing Kubernetes overhead to measure raw application throughput. Workload consisted of 20 concurrent requests uploading 1.9MB video payloads.*
 
-- **Throughput**: Handled 5 concurrent streams, achieving an overall system throughput of **~2.5 conversions per second (4.75 MB/s)**.
+- **Throughput**: Handled 5 concurrent streams, achieving an overall system throughput of **~2.5 conversions per second (5 MB/s)**.
 - **Latency**: Maintained a processing latency of **< 2.2 seconds per video**, successfully decoupling the CPU-bound `MoviePy` processing from the API Gateway.
 - **Resilience**: Achieved a **0% drop rate** during high-load bursts, with RabbitMQ successfully buffering the asynchronous event spikes.
 
