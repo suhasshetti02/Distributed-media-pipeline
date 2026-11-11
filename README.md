@@ -1,4 +1,10 @@
 <div align="center">
+  <img src="./assets/project-banner.svg" width="100%" alt="Distributed Media Processing Pipeline project banner"/>
+</div>
+
+---
+
+<div align="center">
   <h1 align="center">Distributed Media Processing Pipeline</h1>
   
   <p align="center">
