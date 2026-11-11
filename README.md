@@ -1,109 +1,78 @@
-<div align="center">
-  <h1 align="center">Distributed Media Processing Pipeline</h1>
-  
-  <p align="center">
-    A production-grade, fault-tolerant microservices architecture for asynchronous video-to-audio conversion at scale.
-  </p>
+# Distributed Media Processing Pipeline
 
-  <p align="center">
-    <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-    <img src="https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white" />
-    <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
-    <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" />
-    <img src="https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white" />
-    <img src="https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white" />
-    <img src="https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white" />
-  </p>
-</div>
+A Python microservices prototype that accepts video uploads, queues conversion work, converts video audio to MP3, stores media in MongoDB GridFS, and notifies users through an asynchronous event workflow.
 
-A cloud-native, event-driven microservices architecture designed for asynchronous video-to-audio conversion. This project demonstrates proficiency in **decoupled system design, message-oriented middleware, and resilient infrastructure orchestration**.
+> **Project status:** Local Kubernetes / Docker-oriented prototype. The repository contains service code and Kubernetes manifests, but the current implementation has important security and reliability gaps. It should not be presented as production-grade without those issues being addressed.
 
----
+## Services
 
-## 🏗️ System Architecture
+- **Gateway:** Flask API for login, upload, and MP3 download. It validates a JWT through the auth service and stores uploaded videos in GridFS.
+- **Auth:** Flask service backed by MySQL that issues and validates JWTs.
+- **Converter:** RabbitMQ consumer that retrieves a video from GridFS, converts its audio using MoviePy, stores the MP3 in GridFS, and publishes a completion event.
+- **Notification:** RabbitMQ consumer that sends completion notifications through SMTP.
+- **Message broker:** RabbitMQ with Kubernetes manifests for broker deployment and storage.
 
-The system leverages an asynchronous orchestration model to ensure high availability and prevent cascading failures during CPU-intensive media processing.
+## Technology
 
-```mermaid
-graph TD
-    subgraph "External"
-        User(["🌐 Client"])
-        SMTP(["📧 SMTP Server"])
-    end
+- Python, Flask, PyJWT.
+- RabbitMQ / Pika.
+- MongoDB, PyMongo, GridFS.
+- MySQL / Flask-MySQLdb.
+- MoviePy for video/audio conversion.
+- Docker and Kubernetes (Minikube manifests).
 
-    subgraph "Kubernetes Cluster"
-        Gateway["API Gateway (Flask)"]
-        Auth["Auth Service (JWT)"]
-        Converter["Converter Engine (MoviePy)"]
-        Notifier["Notification Service"]
-        RabbitMQ{{"RabbitMQ Event Bus"}}
-    end
+## Processing flow
 
-    subgraph "Data Layer"
-        MySQL[("MySQL (User DB)")]
-        GridFS[("MongoDB GridFS (Blobs)")]
-    end
-
-    User -->|Login/Upload| Gateway
-    Gateway <--> Auth
-    Auth <--> MySQL
-    Gateway --> GridFS
-    Gateway -->|video.task| RabbitMQ
-    RabbitMQ --> Converter
-    Converter <--> GridFS
-    Converter -->|mp3.ready| RabbitMQ
-    RabbitMQ --> Notifier
-    Notifier --> SMTP
-    SMTP --> User
+```text
+Client
+  │
+  ▼
+Flask Gateway ──► MongoDB GridFS (video)
+  │
+  └──► RabbitMQ video queue
+             │
+             ▼
+       Converter worker ──► GridFS (MP3)
+             │
+             └──► RabbitMQ MP3 queue
+                         │
+                         ▼
+                  Notification worker
+                         │
+                         ▼
+                       Email
 ```
 
----
+## Repository layout
 
-## 🧠 Engineering Principles & Design Decisions
+- `microservices/gateway/` — upload/download API and Kubernetes manifests.
+- `microservices/auth/` — login/JWT validation API, SQL initialization, and manifests.
+- `microservices/converter/` — RabbitMQ consumer and MoviePy conversion module.
+- `microservices/notification/` — notification consumer and email sender.
+- `microservices/rabbit/` — RabbitMQ StatefulSet, service, and configuration manifests.
+- `setup.md` — local Minikube deployment walkthrough.
+- `python/github_descriptions.md` — repository description notes.
 
-### 1. Asynchronous Decoupling via Message-Oriented Middleware
-- **Problem**: Media conversion is a CPU-bound operation. Processing it within the request-response cycle would lead to socket exhaustion and HTTP 504 timeouts.
-- **Solution**: Implemented an **Event-Driven Architecture (EDA)** using RabbitMQ. The Gateway offloads heavy lifting to background workers immediately after a successful upload.
-- **Result**: Decoupled the ingestion layer from the processing layer, allowing for independent horizontal scaling of workers based on queue depth.
+## Run and deploy
 
-### 2. Distributed Large Object Management (GridFS)
-- **Problem**: Storing large `.mp4` payloads in local Kubernetes ephemeral storage risks Pod evictions due to disk pressure. Relational databases are not optimized for multi-gigabyte BLOBs.
-- **Solution**: Leveraged **MongoDB GridFS** to shard large media files into manageable **chunks**. 
-- **Result**: Enabled **O(1) memory usage** during processing; the system streams chunks from the database rather than loading entire files into RAM.
+The documented deployment target is Minikube with Docker, kubectl, RabbitMQ, MySQL, and MongoDB reachable from the cluster.
 
-### 3. Stateless Identity Management
-- **Problem**: Traditional session management creates tight coupling between the client and the Auth database, adding I/O overhead to every request.
-- **Solution**: Implemented **JWT (JSON Web Tokens)** for stateless authorization. 
-- **Result**: The API Gateway validates identity claims algorithmically by verifying cryptographic signatures, minimizing database hits and eliminating the need for sticky sessions.
+Follow `setup.md` for the intended deployment flow, but note that its example directory paths should be checked against the actual repository layout under `microservices/`. Create service-specific environment configuration from the manifests and requirements files. Do not commit database passwords, JWT secrets, or SMTP app passwords.
 
-### 4. Fault Tolerance & Message Reliability
-- **Durable Message Delivery**: Configured RabbitMQ with **persistent message delivery** and manual acknowledgments (ACKs). 
-- **Error Handling**: Implemented **NACK/Requeue** logic. If a Converter pod is interrupted, the task is returned to the queue, minimizing the risk of lost tasks during system instability.
-- **Data Integrity**: Integrated compensating transactions to delete orphaned GridFS records if a downstream message broadcast fails.
+## Important implementation limitations
 
----
+- The auth service compares the submitted password directly with the stored database password; it does not hash/verify passwords with a password-hashing algorithm. This is unsafe for real accounts.
+- Gateway, converter, and notification code reads/writes complete media payloads in memory in several places. Do not claim constant-memory streaming for the current conversion path.
+- The converter consumer calls `basic_nack` without enabling requeue. A failed conversion is therefore not guaranteed to be retried; notification failures explicitly request requeue.
+- The services use fixed internal hostnames / MongoDB addresses in code. Configure them for the target Kubernetes network before deployment.
+- The README's throughput and latency claims should be treated as local demonstration measurements, not general capacity guarantees. Reproduce them with the referenced workload before quoting them.
+- Review RabbitMQ queue durability, dead-letter handling, idempotency, file cleanup, upload limits, and retry/backoff behavior before production use.
+- There is no evidence in the current tree of a comprehensive automated end-to-end test suite.
 
-## 📊 Technical Stack
-- **Language**: Python (Flask)
-- **Broker**: RabbitMQ (AMQP)
-- **Databases**: MySQL (Metadata), MongoDB GridFS (Storage)
-- **Orchestration**: Kubernetes (Minikube/kubectl)
-- **Containerization**: Docker
+## Further reading
 
+See `setup.md` for the deployment walkthrough.
 
----
+## License
 
-## 📈 Performance Benchmarks
-*Tested locally using Docker Compose, circumventing Kubernetes overhead to measure raw application throughput. Workload consisted of 20 concurrent requests uploading 1.9MB video payloads.*
-
-- **Throughput**: Handled 5 concurrent streams, achieving an overall system throughput of **~2.5 conversions per second (5 MB/s)**.
-- **Latency**: Maintained a processing latency of **< 2.2 seconds per video**, successfully decoupling the CPU-bound `MoviePy` processing from the API Gateway.
-- **Resilience**: Achieved a **0% drop rate** during high-load bursts, with RabbitMQ successfully buffering the asynchronous event spikes.
-
----
-
-## 🏁 Getting Started
-Detailed deployment manifests and environment configuration can be found in the [Setup & Installation Guide](./setup.md).
-
----
-*Developed as a deep-dive into distributed systems and microservices orchestration.*
+See repository licensing and third-party dependency terms.
