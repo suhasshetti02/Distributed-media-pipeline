@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./assets/project-banner.svg" width="100%" alt="Distributed Media Processing Pipeline project banner"/>
+  <img src="https://raw.githubusercontent.com/suhasshetti02/suhasshetti02/main/assets/projects/media-pipeline.svg" width="100%" alt="media-pipeline project banner"/>
 </div>
 
 ---
